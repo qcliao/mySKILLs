@@ -1,0 +1,83 @@
+{
+  "model_name": "Example Transformer",
+  "title": "Example Transformer Architecture",
+  "source": "Template",
+  "stages": [
+    {
+      "name": "Input Stage",
+      "blocks": [
+        {
+          "type": "Token Embedding",
+          "details": "vocab_size × hidden_dim"
+        },
+        {
+          "type": "Position Embedding",
+          "details": "max_seq_len × hidden_dim"
+        }
+      ]
+    },
+    {
+      "name": "Transformer Layers (N=12)",
+      "blocks": [
+        {
+          "type": "Layer Norm",
+          "details": ""
+        },
+        {
+          "type": "Multi-Head Attention",
+          "details": "num_heads=12"
+        },
+        {
+          "type": "Layer Norm",
+          "details": ""
+        },
+        {
+          "type": "Feed-Forward Network",
+          "details": "hidden_dim → 4×hidden_dim → hidden_dim"
+        }
+      ]
+    },
+    {
+      "name": "Output Stage",
+      "blocks": [
+        {
+          "type": "Layer Norm",
+          "details": ""
+        },
+        {
+          "type": "Linear Projection",
+          "details": "hidden_dim → vocab_size"
+        }
+      ]
+    }
+  ],
+  "custom_nodes": [
+    {
+      "id": "input",
+      "label": "Input Tokens",
+      "color": "lightgray"
+    },
+    {
+      "id": "output",
+      "label": "Logits",
+      "color": "wheat"
+    }
+  ],
+  "custom_edges": [
+    {
+      "from": "input",
+      "to": "stage_0",
+      "label": ""
+    },
+    {
+      "from": "stage_1_block_3",
+      "to": "stage_2",
+      "label": "×12 layers"
+    },
+    {
+      "from": "stage_2_block_1",
+      "to": "output",
+      "label": ""
+    }
+  ]
+}
