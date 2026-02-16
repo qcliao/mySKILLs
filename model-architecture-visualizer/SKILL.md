@@ -11,6 +11,41 @@ Generate visual diagrams of neural network architectures from model names.
 
 When a user requests visualization of a model (e.g., "Draw the architecture of model X"):
 
+### 0. Task Clarification Phase (CRITICAL!)
+
+**Before starting any research, confirm the exact model name and version:**
+
+1. **Verify the model identifier**
+   - If user says "Qwen3.5-397B-A17B", search for **exactly that**
+   - Don't assume "Qwen3" means "Qwen3.5"
+   - Don't drop suffixes like "-397B-A17B", "-72B", "-Instruct"
+   
+2. **Check for version ambiguity**
+   - "GPT-4" vs "GPT-4o" vs "GPT-4 Turbo"
+   - "Llama 3" vs "Llama 3.1" vs "Llama 3.2"
+   - "Qwen3" vs "Qwen3.5" ← **completely different architectures!**
+
+3. **Confirm with user if unclear**
+   ```
+   ❌ Bad: User says "Qwen3.5", you search "Qwen3"
+   ✅ Good: User says "Qwen3.5", you search "Qwen3.5-397B-A17B"
+   ✅ Good: If ambiguous, ask: "Which version? Qwen3 or Qwen3.5?"
+   ```
+
+4. **Use the full model name in searches**
+   ```bash
+   # ✅ Correct
+   site:huggingface.co "Qwen3.5-397B-A17B" architecture
+   
+   # ❌ Wrong (too generic)
+   site:huggingface.co "Qwen" architecture
+   ```
+
+**Why this matters:**
+- Qwen3 ≠ Qwen3.5 (different architectures: pure Transformer vs Hybrid DeltaNet+Attention)
+- Llama 3 ≠ Llama 3.1 (context length, architecture tweaks)
+- GPT-4 ≠ GPT-4o (multimodal vs text-only)
+
 ### 1. Research Phase
 
 Extract architecture information from these sources (in priority order):
@@ -72,6 +107,72 @@ Convert extracted information into JSON config format:
   ]
 }
 ```
+
+**CRITICAL: For Repeating Layer Patterns**
+
+When a model has repeating layer patterns (e.g., "15 × (3 DeltaNet + 1 Attention)"):
+
+❌ **Bad - Abstract Description:**
+```json
+{
+  "stages": [
+    {
+      "name": "Hybrid Layers",
+      "blocks": [
+        {
+          "type": "Pattern Unit (×15)",
+          "details": "Each unit: 3 DeltaNet + 1 Attention"
+        }
+      ]
+    }
+  ]
+}
+```
+Problem: Doesn't show the actual layer structure, just describes it.
+
+✅ **Good - Explicit Expansion:**
+```json
+{
+  "stages": [
+    {
+      "name": "60 Layers Total",
+      "blocks": [
+        {
+          "type": "Repeating Pattern (×15 times)",
+          "details": "Each pattern = 4 layers"
+        }
+      ]
+    },
+    {
+      "name": "Single Pattern Detail (4 layers)",
+      "blocks": [
+        {
+          "type": "Layer 1: DeltaNet + MoE",
+          "details": "Linear attention O(n)\nQ/K:16, V:64, dim:128"
+        },
+        {
+          "type": "Layer 2: DeltaNet + MoE",
+          "details": "Linear attention O(n)\nQ/K:16, V:64, dim:128"
+        },
+        {
+          "type": "Layer 3: DeltaNet + MoE",
+          "details": "Linear attention O(n)\nQ/K:16, V:64, dim:128"
+        },
+        {
+          "type": "Layer 4: Attention + MoE",
+          "details": "Standard attention O(n²)\nQ:32, KV:2, dim:256"
+        }
+      ]
+    }
+  ]
+}
+```
+
+**Why explicit is better:**
+- Shows actual layer sequence
+- Makes pattern clear in visualization
+- Easier to understand the 3:1 ratio
+- Avoids ambiguity
 
 **Block Type Colors:**
 - Attention blocks → `lightgreen`
@@ -484,3 +585,87 @@ digraph ModelArch {
 - Check related models from same organization
 - Look for architecture comparison tables in papers
 - Search for community implementations on Papers with Code
+
+## Common Mistakes & Lessons Learned
+
+### Mistake 1: Model Version Confusion
+
+**Case Study: Qwen3 vs Qwen3.5**
+
+❌ **What went wrong:**
+- User requested "Qwen3.5-397B-A17B"
+- Agent searched "Qwen3 architecture" (dropped "3.5")
+- Analyzed Qwen3 (pure Transformer) instead of Qwen3.5 (Hybrid DeltaNet+Attention)
+- Completely different architectures!
+
+✅ **How to prevent:**
+- Always use the **exact model identifier** in searches
+- Don't drop version numbers or suffixes
+- Verify model page exists before starting analysis
+- When in doubt, ask user to clarify
+
+**Lesson:** Model versions can have radically different architectures. Always confirm the exact model name first.
+
+---
+
+### Mistake 2: Abstract Layer Descriptions
+
+**Case Study: Qwen3.5 Hybrid Layers**
+
+❌ **What went wrong:**
+- JSON config said "Pattern Unit (×15)" with "3 DeltaNet + 1 Attention" in details
+- Visualization script couldn't infer the actual 4-layer structure
+- Diagram showed abstract box instead of clear layer sequence
+
+✅ **How to fix:**
+- Explicitly list out the repeating pattern:
+  - Layer 1: DeltaNet
+  - Layer 2: DeltaNet
+  - Layer 3: DeltaNet
+  - Layer 4: Attention
+- Create separate "stage" for pattern overview + detail
+- Use custom_nodes to explain the repetition
+
+**Lesson:** Be explicit, not abstract. Show actual layer structure, not just descriptions.
+
+---
+
+### Mistake 3: Missing Layer Internal Structure
+
+❌ **What went wrong:**
+- Listed "Gated DeltaNet Layer" without showing what's inside
+- No mention of RMSNorm, residual connections, MoE routing
+
+✅ **How to fix:**
+- Decompose each layer into sub-components:
+  ```
+  Gated DeltaNet Layer:
+  1. RMSNorm (pre-norm)
+  2. Q/K/V projections
+  3. Linear Attention
+  4. Gating mechanism
+  5. Output projection
+  6. Residual connection
+  7. RMSNorm (pre-FFN)
+  8. MoE (512→11)
+  9. Residual connection
+  ```
+
+**Lesson:** Show the full data flow within each layer, not just the layer name.
+
+---
+
+### Best Practices Checklist
+
+Before finalizing any architecture diagram:
+
+- [ ] Verified exact model name (including version number)
+- [ ] Searched with full model identifier (no shortcuts)
+- [ ] Checked official sources (HuggingFace, GitHub, paper)
+- [ ] Explicit layer structure (no abstract patterns)
+- [ ] Decomposed each layer into sub-components
+- [ ] Verified key parameters (heads, dims, experts)
+- [ ] Checked official code if available
+- [ ] Added custom_nodes for complex explanations
+- [ ] Tested DOT file syntax (quoted hex colors)
+- [ ] Generated both overview and detailed views if needed
